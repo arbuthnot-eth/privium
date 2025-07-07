@@ -1,5 +1,5 @@
 {
-  "name": "remote-privy-worker",
+  "name": "remote-privy",
   "main": "src/index.ts",
   "compatibility_date": "2025-07-07",
   "compatibility_flags": [
@@ -7,5 +7,19 @@
   ],
   "ai": {
     "binding": "AI"
-  }
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MCP_OBJECT",
+        "class_name": "MyMCP"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["MyMCP"]
+    }
+  ]
 }
