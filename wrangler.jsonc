@@ -1,0 +1,11 @@
+{
+  "name": "remote-privy-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-07-07",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "ai": {
+    "binding": "AI"
+  }
+}
