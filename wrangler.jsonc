@@ -1,5 +1,5 @@
 {
-  "name": "remote-privy",
+  "name": "privium",
   "main": "src/index.ts",
   "compatibility_date": "2025-07-07",
   "compatibility_flags": [
