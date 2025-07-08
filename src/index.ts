@@ -89,6 +89,84 @@ export class MyMCP extends McpAgent {
 		);
 
 		this.server.tool(
+			"get_wallet_balance",
+			{
+				walletId: z.string(),
+				asset: z.string().optional(),
+				chain: z.string().optional(),
+				include_currency: z.string().optional(),
+			},
+			async ({ walletId, asset, chain, include_currency }) => {
+				try {
+					const env = this.env as Env;
+					const searchParams = new URLSearchParams();
+					if (asset) searchParams.append('asset', asset);
+					if (chain) searchParams.append('chain', chain);
+					if (include_currency) searchParams.append('include_currency', include_currency);
+
+					const privyApiUrl = `https://api.privy.io/v1/wallets/${walletId}/balance?${searchParams.toString()}`;
+
+					const options = {
+						method: 'GET',
+						headers: {
+							'Authorization': 'Basic ' + btoa(`${env.PRIVY_APP_ID}:${env.PRIVY_APP_SECRET}`),
+							'privy-app-id': env.PRIVY_APP_ID
+						}
+					};
+
+					const privyResponse = await fetch(privyApiUrl, options);
+					const responseBody = await privyResponse.json();
+
+					if (!privyResponse.ok) {
+						return { content: [{ type: "text", text: `Error from Privy API: ${JSON.stringify(responseBody)}` }] };
+					}
+
+					return { content: [{ type: "text", text: JSON.stringify(responseBody) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error fetching wallet balance: ${(error as Error).message}` }] };
+				}
+			}
+		);
+
+		this.server.tool(
+			"get_wallet_transactions",
+			{
+				walletId: z.string(),
+				asset: z.string().optional(),
+				chain: z.string().optional(),
+			},
+			async ({ walletId, asset, chain }) => {
+				try {
+					const env = this.env as Env;
+					const searchParams = new URLSearchParams();
+					if (asset) searchParams.append('asset', asset);
+					if (chain) searchParams.append('chain', chain);
+
+					const privyApiUrl = `https://api.privy.io/v1/wallets/${walletId}/transactions?${searchParams.toString()}`;
+
+					const options = {
+						method: 'GET',
+						headers: {
+							'Authorization': 'Basic ' + btoa(`${env.PRIVY_APP_ID}:${env.PRIVY_APP_SECRET}`),
+							'privy-app-id': env.PRIVY_APP_ID
+						}
+					};
+
+					const privyResponse = await fetch(privyApiUrl, options);
+					const responseBody = await privyResponse.json();
+
+					if (!privyResponse.ok) {
+						return { content: [{ type: "text", text: `Error from Privy API: ${JSON.stringify(responseBody)}` }] };
+					}
+
+					return { content: [{ type: "text", text: JSON.stringify(responseBody) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error fetching wallet transactions: ${(error as Error).message}` }] };
+				}
+			}
+		);
+
+		this.server.tool(
 			"create_wallet",
 			{
 				userId: z.string(),
@@ -167,8 +245,9 @@ export default {
 
 		// Handle API routes
 		if (url.pathname.startsWith("/v1/wallets/")) {
-			switch (request.method) {
-				case "GET":
+			if (url.pathname.endsWith("/balance")) {
+				// Handle GET /v1/wallets/{wallet_id}/balance
+				if (request.method === "GET") {
 					try {
 						const walletId = url.pathname.split("/")[3];
 						if (!walletId) {
@@ -177,27 +256,205 @@ export default {
 								status: 400,
 							});
 						}
-						const wallet = await privy.walletApi.getWallet({ id: walletId });
-						if (!wallet) {
-							return new Response(JSON.stringify({ error: "Wallet not found" }), {
+
+						const asset = url.searchParams.get('asset');
+						const chain = url.searchParams.get('chain');
+						const include_currency = url.searchParams.get('include_currency');
+
+						const searchParams = new URLSearchParams();
+						if (asset) searchParams.append('asset', asset);
+						if (chain) searchParams.append('chain', chain);
+						if (include_currency) searchParams.append('include_currency', include_currency);
+
+						const privyApiUrl = `https://api.privy.io/v1/wallets/${walletId}/balance?${searchParams.toString()}`;
+
+						const options = {
+							method: 'GET',
+							headers: {
+								'Authorization': 'Basic ' + btoa(`${env.PRIVY_APP_ID}:${env.PRIVY_APP_SECRET}`),
+								'privy-app-id': env.PRIVY_APP_ID
+							}
+						};
+
+						const privyResponse = await fetch(privyApiUrl, options);
+						const responseBody = await privyResponse.json();
+
+						if (!privyResponse.ok) {
+							return new Response(JSON.stringify({ error: `Error from Privy API: ${JSON.stringify(responseBody)}` }), {
 								headers: { "Content-Type": "application/json" },
-								status: 404,
+								status: privyResponse.status,
 							});
 						}
-						return new Response(JSON.stringify(wallet), {
+
+						return new Response(JSON.stringify(responseBody), {
 							headers: { "Content-Type": "application/json" },
 							status: 200,
 						});
+
 					} catch (error) {
 						return new Response(JSON.stringify({ error: (error as Error).message }), {
 							headers: { "Content-Type": "application/json" },
 							status: 500,
 						});
 					}
+				} else {
+					return new Response("Method Not Allowed", { status: 405 });
+				}
+			} else if (url.pathname.endsWith("/transactions")) {
+				// Handle GET /v1/wallets/{wallet_id}/transactions
+				if (request.method === "GET") {
+					try {
+						const walletId = url.pathname.split("/")[3];
+						if (!walletId) {
+							return new Response(JSON.stringify({ error: "Wallet ID is required" }), {
+								headers: { "Content-Type": "application/json" },
+								status: 400,
+							});
+						}
+
+						const asset = url.searchParams.get('asset');
+						const chain = url.searchParams.get('chain');
+
+						const searchParams = new URLSearchParams();
+						if (asset) searchParams.append('asset', asset);
+						if (chain) searchParams.append('chain', chain);
+
+						const privyApiUrl = `https://api.privy.io/v1/wallets/${walletId}/transactions?${searchParams.toString()}`;
+
+						const options = {
+							method: 'GET',
+							headers: {
+								'Authorization': 'Basic ' + btoa(`${env.PRIVY_APP_ID}:${env.PRIVY_APP_SECRET}`),
+								'privy-app-id': env.PRIVY_APP_ID
+							}
+						};
+
+						const privyResponse = await fetch(privyApiUrl, options);
+						const responseBody = await privyResponse.json();
+
+						if (!privyResponse.ok) {
+							return new Response(JSON.stringify({ error: `Error from Privy API: ${JSON.stringify(responseBody)}` }), {
+								headers: { "Content-Type": "application/json" },
+								status: privyResponse.status,
+							});
+						}
+
+						return new Response(JSON.stringify(responseBody), {
+							headers: { "Content-Type": "application/json" },
+							status: 200,
+						});
+
+					} catch (error) {
+						return new Response(JSON.stringify({ error: (error as Error).message }), {
+							headers: { "Content-Type": "application/json" },
+							status: 500,
+						});
+					}
+				} else {
+					return new Response("Method Not Allowed", { status: 405 });
+				}
+			}
+			else {
+				// Existing GET /v1/wallets/{wallet_id}
+				switch (request.method) {
+					case "GET":
+						try {
+							const walletId = url.pathname.split("/")[3];
+							if (!walletId) {
+								return new Response(JSON.stringify({ error: "Wallet ID is required" }), {
+									headers: { "Content-Type": "application/json" },
+									status: 400,
+								});
+							}
+							const wallet = await privy.walletApi.getWallet({ id: walletId });
+							if (!wallet) {
+								return new Response(JSON.stringify({ error: "Wallet not found" }), {
+									headers: { "Content-Type": "application/json" },
+									status: 404,
+								});
+							}
+							return new Response(JSON.stringify(wallet), {
+								headers: { "Content-Type": "application/json" },
+								status: 200,
+							});
+						} catch (error) {
+							return new Response(JSON.stringify({ error: (error as Error).message }), {
+								headers: { "Content-Type": "application/json" },
+								status: 500,
+							});
+						}
+					default:
+						return new Response("Method Not Allowed", { status: 405 });
+				}
+			}
+		}
+		else if (url.pathname.startsWith("/v1/")) {
+			switch (request.method) {
+				case "POST":
+					switch (url.pathname) {
+						case "/v1/wallets":
+							try {
+								const { owner, chainType, idempotencyKey } = await request.json() as PrivyWalletCreationRequest;
+								const wallet = await privy.walletApi.createWallet({
+									owner,
+									chainType,
+									idempotencyKey,
+								});
+								return new Response(JSON.stringify(wallet), {
+									headers: { "Content-Type": "application/json" },
+									status: 201,
+								});
+							} catch (error) {
+								return new Response(JSON.stringify({ error: (error as Error).message }), {
+									headers: { "Content-Type": "application/json" },
+									status: 400,
+								});
+							}
+						case "/v1/users":
+							console.log("Received POST request for /v1/users");
+							try {
+								const requestBody = await request.json();
+								console.log("Request body:", JSON.stringify(requestBody));
+								const { email, phone_number, external_id, metadata } = requestBody as {
+									email?: string;
+									phone_number?: string;
+									external_id?: string;
+									metadata?: Record<string, any>;
+								};
+
+								const linkedAccounts: any[] = [];
+								if (email) {
+									linkedAccounts.push({ type: 'email', address: email });
+								}
+								if (phone_number) {
+									linkedAccounts.push({ type: 'phone', number: phone_number });
+								}
+								if (external_id) {
+									linkedAccounts.push({ type: 'custom_auth', customUserId: external_id });
+								}
+
+								const user = await privy.importUser({
+									linkedAccounts,
+									customMetadata: metadata,
+								});
+								return new Response(JSON.stringify({ userId: user.id }), {
+									headers: { "Content-Type": "application/json" },
+									status: 201,
+								});
+							} catch (error) {
+								return new Response(JSON.stringify({ error: (error as Error).message }), {
+									headers: { "Content-Type": "application/json" },
+									status: 400,
+								});
+							}
+						default:
+							return new Response("Not found", { status: 404 });
+					}
 				default:
 					return new Response("Method Not Allowed", { status: 405 });
 			}
-		} else if (url.pathname.startsWith("/v1/")) {
+		}
+		else if (url.pathname.startsWith("/v1/")) {
 			switch (request.method) {
 				case "POST":
 					switch (url.pathname) {
