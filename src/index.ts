@@ -47,9 +47,25 @@ export class MyMCP extends McpAgent {
 			"get_wallet_address",
 			{ userId: z.string() },
 			async ({ userId }) => {
-				// In a real implementation, this would interact with Privy to get the user's wallet address
-				const walletAddress = `0x${userId.slice(0, 40).padEnd(40, '0')}`; // Mock address
-				return { content: [{ type: "text", text: `Wallet address for ${userId}: ${walletAddress}` }] };
+				try {
+					const env = this.env as Env;
+					const privy = new PrivyClient(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET);
+					const user = await privy.getUser(userId); // Assuming getUser exists and returns user object
+					if (!user || !user.linkedAccounts) {
+						return { content: [{ type: "text", text: `No user or linked accounts found for user ${userId}` }] };
+					}
+
+					const linkedWallets = user.linkedAccounts.filter(
+						(account: any) => account.type === 'wallet' || account.type === 'evm_wallet' || account.type === 'sol_wallet'
+					);
+
+					if (!linkedWallets || linkedWallets.length === 0) {
+						return { content: [{ type: "text", text: `No linked wallets found for user ${userId}` }] };
+					}
+					return { content: [{ type: "text", text: JSON.stringify(linkedWallets) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error fetching wallets for user ${userId}: ${(error as Error).message}` }] };
+				}
 			}
 		);
 
