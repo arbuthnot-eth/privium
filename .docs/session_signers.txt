@@ -1,0 +1,339 @@
+Session signers
+Overview
+Your app can create session signers that can transact on a user wallet with configurable permissions. Using session signers, users can allow your server to sign requests with their embedded wallet.
+
+Session signers enables your app to take action onchain without needing the user in the loop. This functionality allows your app to:
+
+Approve future onchain actions (i.e. setting a limit order or stop loss) for when the user is offline
+Automate certain onchain actions (i.e. sending a transaction when a certain condition is met)
+Reduce popups by signing transactions on the users behalf
+Privy’s architecture guarantees that your server will never see the wallet’s private key. All signing takes place in a secure enclave that only your application can make authorized requests to.
+
+Follow the guides below to provision session signers for your users’ wallets and enable your app to securely interact with these wallets from your servers.
+
+Session signers
+Configure session signers
+Follow the guide below to configure session signers your app can use to transact on user’s embedded wallets.
+
+​
+1. Create a key quorum
+Fundamentally, a session signer is a key quorum that is authorized to submit transaction request for signature from a user’s wallet.
+
+You can create key quorums in the Privy Dashboard or via an API request,
+
+To generate a key quorum in the Dashboard, navigate to the Wallet infrastructure > Authorization keys page and click on the Create new key button. The modal will show the key quorum ID and the private key used for signing.
+
+Save both these values in a secure location. Privy never sees this private key and cannot help you recover it. The private key will be used to sign transaction requests on the wallet.
+
+The authorization key is the private key of a P-256 keypair. Privy never sees the private key, and verifies signatures on your requests against the corresponding public key to ensure your server authorizes the action to take with a user’s delegated wallet.
+
+​
+2. Create policies to configure permissions [optional]
+Session signers can also have policies that any transaction must satisfy to be signed by the wallet. To configure permissions to control what kinds of actions your app can take with users wallets, set up policies in your Privy dashboard under Wallet infrastructure > Policies.
+
+​
+3. Add the session signer to the wallet
+To use session signers, your user must first grant consent for your app to take certain actions on their behalf. To have users grant consent, follow the guides below depending on the client-side SDK(s) you integrate.
+
+Add session signers
+Wallets created through Privy can either be used directly from a user’s device or from a server. To allow your server to transact on users wallets follow the guide below.
+
+This guide assumes your application has already configured session signers in the Dashboard.
+
+React
+React Native
+To provision server-side access for user’s wallets, use the addSessionSigners method from the useSessionSigners hook:
+
+
+Copy
+
+Ask AI
+addSessionSigners: async ({address: string, signers: {signerId: string, policyIds: string[]}[]}) => Promise<{user: User}>
+​
+Usage
+
+Copy
+
+Ask AI
+import {useSessionSigners} from '@privy-io/react-auth';
+const {addSessionSigners} = useSessionSigners();
+Check out the starter repo for an end to end example of how to use session signers.
+
+​
+Parameters
+The addSessionSigners method accepts a params object with the following fields:
+
+​
+address
+stringrequired
+Address of the embedded wallet to add a session signer to.
+
+​
+signers
+object[]required
+Hide child attributes
+
+​
+signerId
+stringrequired
+The key quorum ID that will be allowed to transact on the wallet. This is the same key quorum ID you generated in the Generate an authorization key step.
+
+​
+policyIds
+string[]
+An ID for a policy that any transaction from the session signer must satisfy to be signed. This is an optional field, if not provided, no policies will apply to the signers requests. Note that at this time, each signer can only have one override policy.
+
+Remove session signers
+Once a user’s wallet has session signers, they may also revoke consent to prevent your app from taking any further wallet actions on their behalf.
+
+React
+React Native
+To remove all the session signers on the wallet, use the removeSessionSigners method from the useSessionSigners hook:
+
+
+Copy
+
+Ask AI
+removeSessionSigners: async ({address: string}) => Promise<{user: User}>
+​
+Usage
+
+Copy
+
+Ask AI
+import {useSessionSigners} from '@privy-io/react-auth';
+...
+const {removeSessionSigners} = useSessionSigners();
+When invoked, the removeSessionSigners method will remove all the session signers, so only the user can transact on the wallet.
+
+After this action, your app will no longer be able to take actions on behalf of the user with their wallet unless the user adds more session signers.
+
+Check out the starter repo for an end to end example of how to use session signers.
+
+​
+Parameters
+The removeSessionSigners method accepts a params object with the following fields:
+
+​
+address
+stringrequired
+Address of the embedded wallet to delegate.
+
+As an example, you might have a button within your app to allow users to remove all session signers like so:
+
+Example remove session signers button
+
+Copy
+
+Ask AI
+import {usePrivy, useSessionSigners, type WalletWithMetadata} from '@privy-io/react-auth';
+
+function RemoveSessionSignersButton() {
+  const {user} = usePrivy();
+  const {removeSessionSigners} = useSessionSigners();
+
+  // Check if the user's wallets already has session signers by searching the linkedAccounts array for wallets
+  // with `delegated: true` set
+  const delegatedWallet = user.linkedAccounts.filter(
+    (account): account is WalletWithMetadata => account.type === 'wallet' && account.delegated
+  );
+
+  const onRevoke = async () => {
+    if (!hasDelegatedWallets) return; // Button is disabled to prevent this case
+    await removeSessionSigners({address: delegatedWallet.address});
+  };
+
+  return (
+    <button disabled={!hasDelegatedWallets} onClick={onRevoke}>
+      Revoke permission for this app to transact on my behalf
+    </button>
+  );
+}
+
+Use session signers
+Once your user’s have session signers on their wallets, your app can take actions on their behalf. This is done by sending requests to the Privy API to sign transactions with the user’s wallet. Follow the guide below to get started with signing transactions on behalf of users.
+
+​
+Requesting signatures
+Wallets provisioned for session signers can be used to transact and sign messages on behalf of a user from your server.
+
+To get started, configure the NodeJS SDK or the REST API. This is how your application will make requests to the Privy API to sign transactions on behalf of users. The signing key you configured in the dashboard is the authorization signing key used to produce authorization signatures when submitting requests.
+
+Once you have configured the NodeJS SDK or REST API, your application can send both Ethereum and Solana transactions from a users wallet. Follow the NodeJS or REST API guides in the Using wallets section to learn more about signing requests with wallets.
+
+​
+Getting wallets
+From your server, you can query Privy to determine what wallets have been provisioned session signers by a given user to allow your app to take actions on their behalf.
+
+NodeJS
+REST API
+Make a GET request to:
+
+
+Copy
+
+Ask AI
+https://auth.privy.io/api/v1/users/<user-did>
+Replace <did> with your desired Privy DID. It should have the format did:privy:XXXXXX.
+
+Below is a sample cURL command for this request:
+
+
+Copy
+
+Ask AI
+curl --request GET https://auth.privy.io/api/v1/users/<user-did> \
+-u "<your-privy-app-id>:<your-privy-app-secret>" \
+-H "privy-app-id: <your-privy-app-id>"
+Then, to get a list of the user’s delegated wallets, inspect the linked_accounts field of the response body for all entries with the fields type: 'wallet' and delegated: true.
+
+Creating key quorums
+​
+Generate a keypair
+To use quorum approvals, you must first generate a P-256 keypair, then register them with Privy alongside an authorization threshold. You can create a keypair with the following command:
+
+
+Copy
+
+Ask AI
+openssl ecparam -name prime256v1 -genkey -noout -out private.pem && \
+openssl ec -in private.pem -pubout -out public.pem
+​
+Register the public key
+After you have generated your keypairs, register them with Privy via the Dashboard or REST API, and make sure to save the id for future use.
+
+REST API
+Dashboard
+Register the public key of the keypair with Privy by making a POST request to:
+
+
+Copy
+
+Ask AI
+https://api.privy.io/v1/key_quorums
+​
+Body
+In the request body, include the following:
+
+​
+public_keys
+string[]required
+A list of PEM or DER formatted P-256 public keys to register. Make sure to include the PEM header and footer and to properly escape any newlines.
+
+​
+authorization_threshold
+number
+The minimum number of signatures required to authorize an action. If left unset, the default is all keys.
+
+​
+display_name
+string
+Human readable display name to attach to the key.
+
+​
+Response
+If the request is successful, Privy will return the following in the response:
+
+​
+id
+string
+Unique ID for the key quorum, used to assign the owner_id to a resource.
+
+​
+authorization_keys
+{public_key: string, display_name: string | null}[]
+The list of public keys and their display names.
+
+​
+authorization_threshold
+number | null
+The minimum number of signatures required to authorize an action. If left unset, the default is all keys.
+
+​
+display_name
+string
+Human readable display name to attach to the key.
+
+​
+Example
+As an example, a request to register a 2 of 2 key quorum might look like the following:
+
+
+Copy
+
+Ask AI
+$ curl --request POST https://api.privy.io/v1/key_quorums \
+-u "<your-privy-app-id>:<your-privy-app-secret>" \
+-H "privy-app-id: <your-privy-app-id>" \
+-H 'Content-Type: application/json' \
+-d '{
+    "display_name": "Sample key",
+    "public_keys": [
+        "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEx4aoeD72yykviK+f/ckqE2CItVIG\n1rCnvC3/XZ1HgpOcMEMialRmTrqIK4oZlYd1RfxU3za/C9yjhboIuoPD3g==\n-----END PUBLIC KEY-----",
+        "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErzZtQr/bMIh3Y8f9ZqseB9i/AfjQ\nhu+agbNqXcJy/TfoNqvc/Y3Mh7gIZ8ZLXQEykycx4mYSpqrxp1lBKqsZDQ==\n-----END PUBLIC KEY-----"
+    ],
+    "authorization_threshold": 2
+}'
+
+
+Using key quorums
+You can specify the key quorum ID as the owner_id when creating a wallet or policy, which will require the quorum to sign for updates to the resource or actions taken with the resource.
+
+​
+Taking actions with wallets
+Signatures from the wallet’s owner are also required to take actions on a wallet. You can grant permissions to additional keys or quorums by specifying them as additional_signers on the wallet.
+
+​
+Collecting required signatures
+To make requests with a wallet with quorum approvals, you’ll need to:
+
+Prepare the request payload that you want to make.
+Generate authorization signatures with the required number of authorization keys to satisfy the authorization threshold.
+Send the signatures along with the request payload to the Privy API via the privy-authorization-signature header, with the signatures separated by commas.
+See Generating signatures for examples.
+
+Each authorization signature must be created with the exact same request payload to be valid.
+
+For distributed approvals, consider implementing a central coordinator service that collects signatures from each authorizer before submitting the request to Privy.
+
+​
+Submitting multi-signature requests
+Once you’ve collected the required signatures, combine them in a comma-separated list and include them in the privy-authorization-signature header:
+
+
+REST API
+
+Copy
+
+Ask AI
+curl --request POST https://api.privy.io/v1/wallets/y5ofctvacjiv53u4hmnqi0e5/rpc \
+-u "<your-privy-app-id>:<your-privy-app-secret>" \
+-H "privy-app-id: <your-privy-app-id>" \
+-H "privy-authorization-signature: <sig1>,<sig2>" \
+-H 'Content-Type: application/json' \
+-d '{
+  "caip2": "eip155:1",
+  "method": "eth_sendTransaction",
+  "params": {
+    "transaction": {
+      "to": "0xE3070d3e4309afA3bC9a6b057685743CF42da77C",
+      "value": "0x2386f26fc10000",
+      "data": "0x"
+    }
+  }
+}'
+Privy validates that:
+
+The required number of signatures are provided.
+All signatures are valid for the request payload.
+All signatures come from authorization keys for the wallet.
+If any validation fails, the request is rejected.
+
+​
+Securing your authorization flow
+For production systems using quorum approvals, consider these best practices:
+
+Store authorization keys in secure environments.
+Maintain comprehensive logs of authorization requests and signatures.
+For wallets with quorum approvals, always make sure authorization keys are managed by different entities.
+Combine key quorums with policies for even stronger security guarantees.

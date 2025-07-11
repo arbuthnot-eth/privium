@@ -1,7 +1,7 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { PrivyClient } from "@privy-io/server-auth";
+import { PrivyClient, SolanaCaip2ChainId } from "@privy-io/server-auth";
 interface PrivyWalletCreationRequest {
   owner: { userId: string };
   chainType: "cosmos" | "stellar" | "sui" | "tron" | "solana" | "ethereum";
@@ -41,7 +41,7 @@ export class MyMCP extends McpAgent {
 		version: "1.0.0",
 	});
 
-	async init() {
+	async init(): Promise<void> {
 		// Placeholder tool for Privy wallet management
 		this.server.tool(
 			"get_wallet_address",
@@ -224,6 +224,260 @@ export class MyMCP extends McpAgent {
 				}
 			}
 		);
+
+		this.server.tool(
+			"create_key_quorum",
+			{
+				displayName: z.string(),
+				publicKeys: z.array(z.string()),
+				authorizationThreshold: z.number().optional(),
+			},
+			async ({ displayName, publicKeys, authorizationThreshold }) => {
+				try {
+					const env = this.env as Env;
+					const privyApiUrl = `https://api.privy.io/v1/key_quorums`;
+					const options = {
+						method: 'POST',
+						headers: {
+							'Authorization': 'Basic ' + btoa(`${env.PRIVY_APP_ID}:${env.PRIVY_APP_SECRET}`),
+							'privy-app-id': env.PRIVY_APP_ID,
+							'Content-Type': 'application/json',
+						},
+						body: JSON.stringify({
+							display_name: displayName,
+							public_keys: publicKeys,
+							authorization_threshold: authorizationThreshold,
+						}),
+					};
+					const privyResponse = await fetch(privyApiUrl, options);
+					const responseBody = await privyResponse.json();
+					if (!privyResponse.ok) {
+						return { content: [{ type: "text", text: `Error from Privy API: ${JSON.stringify(responseBody)}` }] };
+					}
+					return { content: [{ type: "text", text: `Key quorum created. Response: ${JSON.stringify(responseBody)}` }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error creating key quorum: ${(error as Error).message}` }] };
+				}
+			}
+		);
+
+		this.server.tool(
+			"add_session_signer",
+			{
+				address: z.string(),
+				signerId: z.string(),
+			},
+			async ({ address, signerId }) => {
+				// This tool is a placeholder for the client-side action.
+				// In a real application, this would trigger a UI flow
+				// where the user consents to adding the session signer.
+				return {
+					content: [{
+						type: "text",
+						text: `To add the session signer, you would typically call the 'addSessionSigners' method from the Privy React SDK on the client-side with the following parameters: address: '${address}', signers: [{ signerId: '${signerId}' }]`
+					}]
+				};
+			}
+		);
+
+		this.server.tool(
+			"personal_sign",
+			{
+				walletId: z.string(),
+				message: z.string(),
+			},
+			async ({ walletId, message }) => {
+				try {
+					const env = this.env as Env;
+					const privy = new PrivyClient(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET);
+					const responseBody = await privy.walletApi.ethereum.signMessage({
+						walletId,
+						message,
+					});
+					return { content: [{ type: "text", text: JSON.stringify({ method: 'personal_sign', data: responseBody }) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error signing message: ${(error as Error).message}` }] };
+				}
+			}
+		);
+
+		this.server.tool(
+			"sign_typed_data",
+			{
+				walletId: z.string(),
+				typedData: z.any(),
+			},
+			async ({ walletId, typedData }) => {
+				try {
+					const env = this.env as Env;
+					const privy = new PrivyClient(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET);
+					const responseBody = await privy.walletApi.ethereum.signTypedData({
+						walletId,
+						typedData,
+					});
+					return { content: [{ type: "text", text: JSON.stringify({ method: 'eth_signTypedData_v4', data: responseBody }) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error signing typed data: ${(error as Error).message}` }] };
+				}
+			}
+		);
+
+		this.server.tool(
+			"secp256k1_sign",
+			{
+				walletId: z.string(),
+				hash: z.string().refine((val): val is `0x${string}` => val.startsWith('0x')),
+			},
+			async ({ walletId, hash }) => {
+				try {
+					const env = this.env as Env;
+					const privy = new PrivyClient(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET);
+					const responseBody = await privy.walletApi.ethereum.secp256k1Sign({
+						walletId,
+						hash,
+					});
+					return { content: [{ type: "text", text: JSON.stringify({ method: 'secp256k1_sign', data: responseBody }) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error with secp256k1 sign: ${(error as Error).message}` }] };
+				}
+			}
+		);
+
+		this.server.tool(
+			"solana_sign_message",
+			{
+				walletId: z.string(),
+				message: z.string(),
+			},
+			async ({ walletId, message }) => {
+				try {
+					const env = this.env as Env;
+					const privy = new PrivyClient(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET);
+					const responseBody = await privy.walletApi.solana.signMessage({
+						walletId,
+						message,
+					});
+					return { content: [{ type: "text", text: JSON.stringify({ method: 'signMessage', data: responseBody }) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error signing Solana message: ${(error as Error).message}` }] };
+				}
+			}
+		);
+
+		this.server.tool(
+			"ethereum_send_transaction",
+			{
+				walletId: z.string(),
+				caip2: z.string().refine((val): val is `eip155:${string}` => val.startsWith('eip155:')),
+				transaction: z.any(),
+			},
+			async ({ walletId, caip2, transaction }) => {
+				try {
+					const env = this.env as Env;
+					const privy = new PrivyClient(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET);
+					const responseBody = await privy.walletApi.ethereum.sendTransaction({
+						walletId,
+						caip2,
+						transaction,
+					});
+					return { content: [{ type: "text", text: JSON.stringify({ method: 'eth_sendTransaction', data: responseBody }) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error sending Ethereum transaction: ${(error as Error).message}` }] };
+				}
+			}
+		);
+
+		this.server.tool(
+			"ethereum_sign_transaction",
+			{
+				walletId: z.string(),
+				transaction: z.any(),
+			},
+			async ({ walletId, transaction }) => {
+				try {
+					const env = this.env as Env;
+					const privy = new PrivyClient(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET);
+					const responseBody = await privy.walletApi.ethereum.signTransaction({
+						walletId,
+						transaction,
+					});
+					return { content: [{ type: "text", text: JSON.stringify({ method: 'eth_signTransaction', data: responseBody }) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error signing Ethereum transaction: ${(error as Error).message}` }] };
+				}
+			}
+		);
+
+		this.server.tool(
+			"ethereum_sign_7702_authorization",
+			{
+				walletId: z.string(),
+				contract: z.string().refine((val): val is `0x${string}` => val.startsWith('0x')),
+				chainId: z.number(),
+				nonce: z.string(), // Assuming nonce is a string that can be converted to Quantity
+			},
+			async ({ walletId, contract, chainId, nonce }) => {
+				try {
+					const env = this.env as Env;
+					const privy = new PrivyClient(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET);
+					const responseBody = await privy.walletApi.ethereum.sign7702Authorization({
+						walletId,
+						contract,
+						chainId,
+						nonce: nonce as `0x${string}`, // Casting here, assuming validation is sufficient
+					});
+					return { content: [{ type: "text", text: JSON.stringify({ method: 'eth_sign7702Authorization', data: responseBody }) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error signing 7702 authorization: ${(error as Error).message}` }] };
+				}
+			}
+		);
+
+		this.server.tool(
+			"solana_sign_and_send_transaction",
+			{
+				walletId: z.string(),
+				caip2: z.custom<SolanaCaip2ChainId>((val) => {
+					return typeof val === 'string' && val.startsWith('solana:');
+				}),
+				transaction: z.any(),
+			},
+			async ({ walletId, caip2, transaction }) => {
+				try {
+					const env = this.env as Env;
+					const privy = new PrivyClient(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET);
+					const responseBody = await privy.walletApi.solana.signAndSendTransaction({
+						walletId,
+						caip2,
+						transaction,
+					});
+					return { content: [{ type: "text", text: JSON.stringify({ method: 'signAndSendTransaction', data: responseBody }) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error signing and sending Solana transaction: ${(error as Error).message}` }] };
+				}
+			}
+		);
+
+		this.server.tool(
+			"solana_sign_transaction",
+			{
+				walletId: z.string(),
+				transaction: z.any(),
+			},
+			async ({ walletId, transaction }) => {
+				try {
+					const env = this.env as Env;
+					const privy = new PrivyClient(env.PRIVY_APP_ID, env.PRIVY_APP_SECRET);
+					const responseBody = await privy.walletApi.solana.signTransaction({
+						walletId,
+						transaction,
+					});
+					return { content: [{ type: "text", text: JSON.stringify({ method: 'signTransaction', data: responseBody }) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `Error signing Solana transaction: ${(error as Error).message}` }] };
+				}
+			}
+		);
 	}
 }
 
@@ -353,8 +607,102 @@ export default {
 				} else {
 					return new Response("Method Not Allowed", { status: 405 });
 				}
-			}
-			else {
+			} else if (url.pathname.endsWith("/rpc")) {
+				// Handle POST /v1/wallets/{wallet_id}/rpc for message signing
+				if (request.method === "POST") {
+					try {
+						const walletId = url.pathname.split("/")[3];
+						if (!walletId) {
+							return new Response(JSON.stringify({ error: "Wallet ID is required" }), {
+								headers: { "Content-Type": "application/json" },
+								status: 400,
+							});
+						}
+
+						const { method, params } = await request.json() as { method: string; params: any };
+
+						let responseBody: any;
+						switch (method) {
+							case "personal_sign":
+								responseBody = await privy.walletApi.ethereum.signMessage({
+									walletId,
+									message: params.message,
+								});
+								break;
+							case "eth_signTypedData_v4":
+								responseBody = await privy.walletApi.ethereum.signTypedData({
+									walletId,
+									typedData: params.typed_data,
+								});
+								break;
+							case "secp256k1_sign":
+								responseBody = await privy.walletApi.ethereum.secp256k1Sign({
+									walletId,
+									hash: params.hash,
+								});
+								break;
+							case "signMessage": // Solana
+								responseBody = await privy.walletApi.solana.signMessage({
+									walletId,
+									message: params.message,
+								});
+								break;
+							case "eth_sendTransaction":
+								responseBody = await privy.walletApi.ethereum.sendTransaction({
+									walletId,
+									caip2: params.caip2,
+									transaction: params.transaction,
+								});
+								break;
+							case "eth_signTransaction":
+								responseBody = await privy.walletApi.ethereum.signTransaction({
+									walletId,
+									transaction: params.transaction,
+								});
+								break;
+							case "eth_sign7702Authorization":
+								responseBody = await privy.walletApi.ethereum.sign7702Authorization({
+									walletId,
+									contract: params.contract,
+									chainId: params.chain_id,
+									nonce: params.nonce,
+								});
+								break;
+							case "signAndSendTransaction": // Solana
+								responseBody = await privy.walletApi.solana.signAndSendTransaction({
+									walletId,
+									caip2: params.caip2,
+									transaction: params.transaction,
+								});
+								break;
+							case "signTransaction": // Solana
+								responseBody = await privy.walletApi.solana.signTransaction({
+									walletId,
+									transaction: params.transaction,
+								});
+								break;
+							default:
+								return new Response(JSON.stringify({ error: `Unsupported RPC method: ${method}` }), {
+									headers: { "Content-Type": "application/json" },
+									status: 400,
+								});
+						}
+
+						return new Response(JSON.stringify({ method, data: responseBody }), {
+							headers: { "Content-Type": "application/json" },
+							status: 200,
+						});
+
+					} catch (error) {
+						return new Response(JSON.stringify({ error: `Error processing RPC request: ${(error as Error).message}` }), {
+							headers: { "Content-Type": "application/json" },
+							status: 500,
+						});
+					}
+				} else {
+					return new Response("Method Not Allowed", { status: 405 });
+				}
+			} else {
 				// Existing GET /v1/wallets/{wallet_id}
 				switch (request.method) {
 					case "GET":
@@ -387,8 +735,7 @@ export default {
 						return new Response("Method Not Allowed", { status: 405 });
 				}
 			}
-		}
-		else if (url.pathname.startsWith("/v1/")) {
+		} else if (url.pathname.startsWith("/v1/")) {
 			switch (request.method) {
 				case "POST":
 					switch (url.pathname) {

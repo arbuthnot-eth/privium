@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privy Session Signer Setup</title>
+    <script src="https://cdn.jsdelivr.net/npm/@privy-io/web@latest"></script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        button { padding: 10px 20px; margin-top: 10px; cursor: pointer; }
+        #status { margin-top: 20px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; }
+    </style>
+</head>
+<body>
+    <h1>Privy Session Signer Setup</h1>
+    <p>This page demonstrates how to grant server-side signing permissions to your Privy wallet.</p>
+    <p>
+        <strong>Signer ID:</strong> <span id="signerIdDisplay">Loading...</span>
+    </p>
+    <div>
+        <label for="walletAddressInput">Your Wallet Address:</label>
+        <input type="text" id="walletAddressInput" placeholder="Enter your wallet address here" size="45">
+    </div>
+    <button id="connectWalletBtn">Connect Privy Wallet</button>
+    <button id="grantPermissionsBtn" disabled>Grant Signing Permissions</button>
+    <div id="status">Status: Not connected.</div>
+
+    <script>
+        // Replace with your actual Privy App ID
+        const PRIVY_APP_ID = 'YOUR_PRIVY_APP_ID'; // You need to replace this!
+
+        // Replace with the actual wallet address and signerId from the previous steps
+        const SIGNER_ID = 'ynsz56euygcmicfyit908ltb'; // Your signer ID
+
+        let walletAddress = ''; // Will be set dynamically
+
+        const statusDiv = document.getElementById('status');
+        const connectWalletBtn = document.getElementById('connectWalletBtn');
+        const grantPermissionsBtn = document.getElementById('grantPermissionsBtn');
+        const signerIdDisplay = document.getElementById('signerIdDisplay');
+        const walletAddressInput = document.getElementById('walletAddressInput');
+
+        let privy;
+
+        function updateStatus(message, isError = false) {
+            statusDiv.textContent = `Status: ${message}`;
+            statusDiv.style.color = isError ? 'red' : 'green';
+        }
+
+        async function initializePrivy() {
+            if (typeof window.privy === 'undefined') {
+                updateStatus('Privy SDK not loaded. Please check your internet connection or CDN link.', true);
+                return;
+            }
+            privy = window.privy;
+            privy.init({
+                appId: PRIVY_APP_ID,
+                // Add any other Privy config here, e.g., appearance
+            });
+            updateStatus('Privy SDK initialized. Connect your wallet.');
+            connectWalletBtn.disabled = false;
+            signerIdDisplay.textContent = SIGNER_ID;
+            walletAddressInput.value = ''; // Clear input on init
+            walletAddressInput.addEventListener('input', (event) => {
+                walletAddress = event.target.value;
+            });
+        }
+
+        async function connectWallet() {
+            try {
+                updateStatus('Connecting wallet...');
+                const loginResult = await privy.login();
+                if (loginResult && loginResult.wallet) {
+                    walletAddress = loginResult.wallet.address;
+                    walletAddressInput.value = walletAddress;
+                    updateStatus('Wallet connected!');
+                    grantPermissionsBtn.disabled = false;
+                } else {
+                    updateStatus('Wallet connection failed or no wallet found.', true);
+                }
+            } catch (error) {
+                updateStatus(`Error connecting wallet: ${error.message}`, true);
+            }
+        }
+
+        async function grantPermissions() {
+            try {
+                updateStatus('Granting permissions...');
+                // Ensure the user is logged in and has a linked wallet
+                const embeddedWallet = privy.user.linkedAccounts.find(
+                    (account) => account.type === 'wallet' && account.walletClientType === 'privy'
+                );
+
+                if (!embeddedWallet) {
+                    updateStatus('No embedded wallet found for the connected user.', true);
+                    return;
+                }
+
+                // This is the key call to grant consent
+                if (!walletAddress) {
+                    updateStatus('Please enter or connect a wallet address.', true);
+                    return;
+                }
+                await privy.addSessionSigners({
+                    address: walletAddress,
+                    signers: [{ signerId: SIGNER_ID }],
+                });
+
+                updateStatus('Session signer added successfully! Server-side signing is now enabled.');
+                grantPermissionsBtn.disabled = true; // Disable after success
+            } catch (error) {
+                updateStatus(`Error granting permissions: ${error.message}`, true);
+            }
+        }
+
+        connectWalletBtn.addEventListener('click', connectWallet);
+        grantPermissionsBtn.addEventListener('click', grantPermissions);
+
+        initializePrivy();
+    </script>
+</body>
+</html>
